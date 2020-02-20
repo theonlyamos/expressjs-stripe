@@ -336,7 +336,7 @@ main > .container-lg .cell {
   -ms-flex: auto;
   flex: auto;
   min-width: 100%;
-  min-height: 500px;
+  min-height: 550px;
   padding: 0 40px;
 }
 
@@ -346,6 +346,15 @@ main > .container-lg .cell + .cell {
 
 main > .container-lg .cell.intro {
   padding: 0;
+}
+
+/* My Code */
+.success pre {
+  font-size: 0.8em !important;
+  text-align: left;
+  color: whitesmoke;
+  max-height: 300px;
+  overflow: auto;
 }
 
 @media (min-width: 670px) {

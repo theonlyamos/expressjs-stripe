@@ -1,152 +1,126 @@
-'use strict';
+// A reference to Stripe.js
+var stripe;
 
-var stripe = Stripe('pk_test_wlPj0KvFkjym9mrxbootdYVL00AzjkpcAe');
+var orderData = {
+  amount: 300,
+  currency: "usd"
+};
 
-function registerElements(elements, exampleName) {
-  var formClass = '.' + exampleName;
-  var example = document.querySelector(formClass);
+const formClass = '.example5';
+const example = document.querySelector(formClass);
+const form = document.getElementById("card-element")
+const error = form.querySelector('.error');
+const errorMessage = error.querySelector('.message');
 
-  var form = example.querySelector('form');
-  var resetButton = example.querySelector('a.reset');
-  var error = form.querySelector('.error');
-  var errorMessage = error.querySelector('.message');
+fetch("/create-payment-intent", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify(orderData)
+})
+  .then(function(result) {
+    return result.json();
+  })
+  .then(function(data) {
 
-  function enableInputs() {
-    Array.prototype.forEach.call(
-      form.querySelectorAll(
-        "input[type='text'], input[type='email'], input[type='tel']"
-      ),
-      function(input) {
-        input.removeAttribute('disabled');
-      }
-    );
-  }
-
-  function disableInputs() {
-    Array.prototype.forEach.call(
-      form.querySelectorAll(
-        "input[type='text'], input[type='email'], input[type='tel']"
-      ),
-      function(input) {
-        input.setAttribute('disabled', 'true');
-      }
-    );
-  }
-
-  function triggerBrowserValidation() {
-    // The only way to trigger HTML5 form validation UI is to fake a user submit
-    // event.
-    var submit = document.createElement('input');
-    submit.type = 'submit';
-    submit.style.display = 'none';
-    form.appendChild(submit);
-    submit.click();
-    submit.remove();
-  }
-
-  // Listen for errors from each Element, and show error messages in the UI.
-  var savedErrors = {};
-  elements.forEach(function(element, idx) {
-    element.on('change', function(event) {
-      if (event.error) {
-        error.classList.add('visible');
-        savedErrors[idx] = event.error.message;
-        errorMessage.innerText = event.error.message;
-      } else {
-        savedErrors[idx] = null;
-
-        // Loop over the saved errors and find the first one, if any.
-        var nextError = Object.keys(savedErrors)
-          .sort()
-          .reduce(function(maybeFoundError, key) {
-            return maybeFoundError || savedErrors[key];
-          }, null);
-
-        if (nextError) {
-          // Now that they've fixed the current error, show another one.
-          errorMessage.innerText = nextError;
-        } else {
-          // The user fixed the last error; no more errors.
-          error.classList.remove('visible');
-        }
-      }
+    return setupElements(data);
+  })
+  .then(function({ stripe, card, clientSecret }) {
+    document.querySelector("#submit").addEventListener("click", function(evt) {
+      evt.preventDefault();
+      // Initiate payment when the submit button is clicked
+      if (form.reportValidity())
+        pay(stripe, card, clientSecret);
     });
   });
 
-  // Listen on the form's 'submit' handler...
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-
-    // Trigger HTML5 validation UI on the form if any of the inputs fail
-    // validation.
-    var plainInputsValid = true;
-    Array.prototype.forEach.call(form.querySelectorAll('input'), function(
-      input
-    ) {
-      if (input.checkValidity && !input.checkValidity()) {
-        plainInputsValid = false;
-        return;
+// Set up Stripe.js and Elements to use in checkout form
+var setupElements = function(data) {
+  stripe = Stripe(data.publicKey);
+  var elements = stripe.elements();
+  var style = {
+    base: {
+      color: "#32325d",
+      fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
+      fontSmoothing: "antialiased",
+      fontSize: "16px",
+      "::placeholder": {
+        color: "#aab7c4"
       }
-    });
-    if (!plainInputsValid) {
-      triggerBrowserValidation();
-      return;
+    },
+    invalid: {
+      color: "#fa755a",
+      iconColor: "#fa755a"
     }
+  };
 
-    // Show a loading screen...
+  var card = elements.create("card", { style: style });
+  card.mount("#example5-card");
+
+  return {
+    stripe: stripe,
+    card: card,
+    clientSecret: data.clientSecret
+  };
+};
+
+/*
+ * Calls stripe.handleCardPayment which creates a pop-up modal to
+ * prompt the user to enter extra authentication details without leaving your page
+ */
+var pay = function(stripe, card, clientSecret) {
+  changeLoadingState(true);
+
+  // Initiate the payment.
+  // If authentication is required, handleCardPayment will automatically display a modal
+  stripe.handleCardPayment(clientSecret, card).then(function(result) {
+    if (result.error) {
+      // Show error to your customer
+      showError(result.error.message);
+      example.classList.remove('submitted');
+    } else {
+      // The payment has been processed!
+      orderComplete(clientSecret);
+    }
+  });
+};
+
+/* ------- Post-payment helpers ------- */
+
+/* Shows a success / error message when the payment is complete */
+var orderComplete = function(clientSecret) {
+  stripe.retrievePaymentIntent(clientSecret).then(function(result) {
+    var paymentIntent = result.paymentIntent;
+    var paymentIntentJson = JSON.stringify(paymentIntent, null, 2);
+
+    changeLoadingState(false);
+
+    document.querySelector("pre").textContent = paymentIntentJson;
+    
+  });
+};
+
+var showError = function(errorMsgText) {
+  changeLoadingState(false);
+  error.classList.add('visible');
+  errorMessage.innerText = errorMsgText;
+  setTimeout(function() {
+    errorMessage.textContent = "";
+    error.classList.remove('visible');
+  }, 10000);
+};
+
+// Show a spinner on payment submission
+var changeLoadingState = function(isLoading) {
+  if (isLoading) {
     example.classList.add('submitting');
 
-    // Disable all inputs.
-    disableInputs();
+  } else {
+    example.classList.remove('submitting');
+    example.classList.add('submitted');
 
-    // Gather additional customer data we may have collected in our form.
-    var name = form.querySelector('#' + exampleName + '-name');
-    var address1 = form.querySelector('#' + exampleName + '-address');
-    var city = form.querySelector('#' + exampleName + '-city');
-    var state = form.querySelector('#' + exampleName + '-state');
-    var zip = form.querySelector('#' + exampleName + '-zip');
-    var additionalData = {
-      name: name ? name.value : undefined,
-      address_line1: address1 ? address1.value : undefined,
-      address_city: city ? city.value : undefined,
-      address_state: state ? state.value : undefined,
-      address_zip: zip ? zip.value : undefined,
-    };
+  }
+};
 
-    // Use Stripe.js to create a token. We only need to pass in one Element
-    // from the Element group in order to create a token. We can also pass
-    // in the additional customer data we collected in our form.
-    stripe.createToken(elements[0], additionalData).then(function(result) {
-      // Stop loading!
-      example.classList.remove('submitting');
-
-      if (result.token) {
-        // If we received a token, show the token ID.
-        example.querySelector('.token').innerText = result.token.id;
-        example.classList.add('submitted');
-      } else {
-        // Otherwise, un-disable inputs.
-        enableInputs();
-      }
-    });
-  });
-
-  resetButton.addEventListener('click', function(e) {
-    e.preventDefault();
-    // Resetting the form (instead of setting the value to `''` for each input)
-    // helps us clear webkit autofill styles.
-    form.reset();
-
-    // Clear each Element.
-    elements.forEach(function(element) {
-      element.clear();
-    });
-
-    // Reset error state as well.
-    error.classList.remove('visible');
-
-    // Resetting the form does not un-disable inputs, so we need to do it separately:
-    enableInputs();
-    example.classList.remove('submitted');
-  });
-}
+// Hide banner if window is too small
