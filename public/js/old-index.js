@@ -78,7 +78,8 @@ const setupElements = function (data) {
 
   return {
     stripe: stripe,
-    card: cardNumber
+    card: cardNumber,
+    clientSecret: data.clientSecret
   };
 };
 
@@ -155,10 +156,10 @@ elements.forEach(function (element, idx) {
 });
 */
 
-var showError = function (errorMsgText) {
+var showError = function(errorMsgText) {
   error.classList.add('visible');
   errorMessage.innerText = errorMsgText;
-  setTimeout(function () {
+  setTimeout(function() {
     errorMessage.textContent = "";
     error.classList.remove('visible');
   }, 10000);
@@ -168,7 +169,7 @@ var showError = function (errorMsgText) {
 const submitForm = (data) => {
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-
+  
     // Trigger HTML5 validation UI on the form if any of the inputs fail
     // validation.
     var plainInputsValid = true;
@@ -184,13 +185,13 @@ const submitForm = (data) => {
       triggerBrowserValidation();
       return;
     }
-
+  
     // Show a loading screen...
     example.classList.add('submitting');
-
+  
     // Disable all inputs.
     disableInputs();
-
+  
     // Gather additional customer data we may have collected in our form.
     var name = form.querySelector('#' + exampleName + '-name');
     var email = form.querySelector('#' + exampleName + '-email');
@@ -210,99 +211,29 @@ const submitForm = (data) => {
     };
     data.additionalData = additionalData
     pay(data);
-
+  
     // Use Stripe.js to create a token. We only need to pass in one Element
     // from the Element group in order to create a token. We can also pass
     // in the additional customer data we collected in our form.
-
-
-    /*
-      stripe.createToken(elements[0], additionalData).then(function (result) {
-        // Stop loading!
-        example.classList.remove('submitting');
-    
-        if (result.token) {
-          // If we received a token, show the token ID.
-          console.log(result)
-          example.querySelector('.token').innerText = result.token.id;
-          example.classList.add('submitted');
-        } else {
-          // Otherwise, un-disable inputs.
-          enableInputs();
-        }
-      });
-      */
+  
+  
+  /*
+    stripe.createToken(elements[0], additionalData).then(function (result) {
+      // Stop loading!
+      example.classList.remove('submitting');
+  
+      if (result.token) {
+        // If we received a token, show the token ID.
+        console.log(result)
+        example.querySelector('.token').innerText = result.token.id;
+        example.classList.add('submitted');
+      } else {
+        // Otherwise, un-disable inputs.
+        enableInputs();
+      }
+    });
+    */
   });
-}
-
-const redirect = (cid) => {
-  setTimeout(function () {
-    window.location = "/complete/"+cid
-  }, 2000);
-}
-
-function stripePaymentMethodHandler(result) {
-  if (result.error) {
-    // Show error in payment form
-  } else {
-    // Otherwise send paymentMethod.id to your server
-    fetch('/create-customer', {
-        method: 'post',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: result.paymentMethod.billing_details.name,
-          email: result.paymentMethod.billing_details.email,
-          phone: result.paymentMethod.billing_details.phone,
-          payment_method: result.paymentMethod.id,
-          plan: plan
-        }),
-      }).then(function (result) {
-        return result.json();
-      }).then(function (response) {
-        // The customer has been created
-        if (response.type === "StripeCardError") {
-          example.classList.remove('submitting');
-          showError("Your card was declined!");
-        } else {
-          const {
-            client_secret,
-            status
-          } = response.paymentIntent;
-
-          if (status === 'requires_action' || status === "requires_payment_method") {
-            stripe.confirmCardPayment(client_secret).then(function (result) {
-              example.classList.remove('submitting');
-              if (result.error) {
-                // Display error message in your UI.
-                // The card was declined (i.e. insufficient funds, card has expired, etc)
-                example.classList.remove('submitted');
-                showError(result.error.message);
-              } else {
-                // Show a success message to your customer
-                example.classList.add('submitted');
-                redirect(response.customer.id)
-                //var responseJson = JSON.stringify(response.customer, null, 2);
-                //document.querySelector("pre").textContent = responseJson;
-              }
-            });
-          } else {
-            // No additional information was needed
-            // Show a success message to your customer
-            example.classList.add('submitted');
-            redirect(response.customer.id)
-            //var responseJson = JSON.stringify(response.customer, null, 2);
-            //document.querySelector("pre").textContent = responseJson;
-          }
-        }
-
-      })
-      .catch((error) => {
-        example.classList.remove('submitting');
-        showError(error);
-      })
-  }
 }
 
 var pay = function (data) {
@@ -310,12 +241,24 @@ var pay = function (data) {
 
   // Initiate the payment.
   // If authentication is required, handleCardPayment will automatically display a modal
-
-  var card = data.card
-  var additionalData = data.additionalData;
-
-  stripe.createPaymentMethod({
-    type: 'card',
+  /*
+  stripe.handleCardPayment(data).then(function (result) {
+    console.log(result)
+    if (result.error) {
+      // Show error to your customer
+      
+      showError(result.error.message);
+      example.classList.remove('submitted');
+    } else {
+      // The payment has been processed!
+      orderComplete(clientSecret);
+    }
+  });
+  */
+ var card = data.card
+ var additionalData = data.additionalData;
+ stripe.confirmCardPayment(data.clientSecret, {
+  payment_method: {
     card: card,
     billing_details: {
       name: additionalData.name,
@@ -328,9 +271,30 @@ var pay = function (data) {
         line1: additionalData.line1,
         postal_code: additionalData.postal_code,
       }
-    },
-  }).then(stripePaymentMethodHandler);
-}
+    }
+  }
+}).then(function(result) {
+  example.classList.remove('submitting');
+  if (result.error) {
+    // Show error to your customer (e.g., insufficient funds)
+    example.classList.remove('submitted');
+    showError(result.error.message);
+  } else {
+    // The payment has been processed!
+    orderComplete(data.clientSecret);
+    if (result.paymentIntent.status === 'succeeded') {
+      // Show a success message to your customer
+      // There's a risk of the customer closing the window before callback
+      // execution. Set up a webhook or plugin to listen for the
+      // payment_intent.succeeded event that handles any business critical
+      // post-payment actions.
+      example.classList.add('submitted');
+      enableInputs();
+    }
+  }
+});
+};
+
 /* ------- Post-payment helpers ------- */
 
 /* Shows a success / error message when the payment is complete */
@@ -340,26 +304,25 @@ var orderComplete = function (clientSecret) {
     var payment_id = result.paymentIntent.payment_method;
     //var paymentIntent = result.paymentIntent;
     //var paymentIntentJson = JSON.stringify(paymentIntent, null, 2);
+    console.log(payment_id);
     //changeLoadingState(false);
 
 
     fetch("/retrieve-payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          pm_id: payment_id
-        })
-      })
-      .then(function (result) {
-        return result.json();
-      }).then((response) => {
-        var responseJson = JSON.stringify(response, null, 2);
-        document.querySelector("pre").textContent = responseJson;
-      })
-
-
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({pm_id: payment_id})
+    })
+    .then(function (result) {
+      return result.json();
+    }).then((response) => {
+      var responseJson = JSON.stringify(response, null, 2);
+      document.querySelector("pre").textContent = responseJson;
+    })
+    
+    
 
   });
 };
@@ -384,34 +347,28 @@ resetButton.addEventListener('click', function (e) {
   example.classList.remove('submitted');
 });
 */
-fetch("/publishable-key", {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json"
-    }
-  })
-  .then(function (result) {
-    return result.json();
-  })
-  .then(function (data) {
-    return setupElements(data);
-  })
-  .then(function ({
-    stripe,
-    card,
-    clientSecret
-  }) {
-    submitForm({
-      stripe,
-      card,
-      clientSecret
-    });
-    /*
-    document.querySelector("#submit").addEventListener("click", function (evt) {
-      evt.preventDefault();
-      // Initiate payment when the submit button is clicked
-      if (form.reportValidity())
-        pay(stripe, card, clientSecret);
-    });
-    */
+fetch("/create-payment-intent", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify(orderData)
+})
+.then(function (result) {
+  return result.json();
+})
+.then(function (data) {
+  return setupElements(data);
+})
+.then(function ({stripe, card,clientSecret
+}) {
+  submitForm({stripe, card, clientSecret});
+  /*
+  document.querySelector("#submit").addEventListener("click", function (evt) {
+    evt.preventDefault();
+    // Initiate payment when the submit button is clicked
+    if (form.reportValidity())
+      pay(stripe, card, clientSecret);
   });
+  */
+});

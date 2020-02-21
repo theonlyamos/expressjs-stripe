@@ -4,9 +4,10 @@ const path = require('path');
 const pug = require('pug');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
+require("dotenv").config()
 
-const keyPublishable = 'pk_test_wlPj0KvFkjym9mrxbootdYVL00AzjkpcAe';
-const keySecret = 'sk_test_jLrSf2i1YLL4ZGKRMNY5ZeAn00sWXiuSJW';
+const keyPublishable = process.env.STRIPE_PUB_KEY;
+const keySecret = process.env.STRIPE_SECRET_KEY;
 
 const indexRouter = require('./routes/index');
 const usersRouter = require('./routes/users');
@@ -23,14 +24,16 @@ app.use(
   express.json({
     // We need the raw body to verify webhook signatures.
     // Let's compute it only when hitting the Stripe webhook endpoint.
-    verify: function(req, res, buf) {
+    verify: function (req, res, buf) {
       if (req.originalUrl.startsWith("/webhook")) {
         req.rawBody = buf.toString();
       }
     }
   })
 );
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({
+  extended: false
+}));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -38,27 +41,29 @@ app.use('/', indexRouter);
 app.use('/users', usersRouter);
 
 app.get("/stripe-key", (req, res) => {
-  res.send({ publishableKey: keyPublishable });
+  res.send({
+    publishableKey: keyPublishable
+  });
 });
 
-app.post("/charge", function(req, res) {
+app.post("/charge", function (req, res) {
 
-    let amount = 5*100; // 500 cents means $5
+  let amount = 5 * 100; // 500 cents means $5
 
-    // create a customer
-    stripe.customers.create({
-        email: req.body.stripeEmail, // customer email, which user need to enter while making payment
-        source: req.body.stripeToken // token for the given card
+  // create a customer
+  stripe.customers.create({
+      email: req.body.stripeEmail, // customer email, which user need to enter while making payment
+      source: req.body.stripeToken // token for the given card
     })
     .then(customer =>
-        stripe.charges.create({ // charge the customer
+      stripe.charges.create({ // charge the customer
         amount,
         description: "Sample Charge",
-            currency: "usd",
-            customer: customer.id
-        }))
-    .then(charge => 
-        res.render("charge")
+        currency: "usd",
+        customer: customer.id
+      }))
+    .then(charge =>
+      res.render("charge")
     )
     .catch((error) => {
       console.log(error.type);
@@ -66,15 +71,83 @@ app.post("/charge", function(req, res) {
 
 });
 
-app.post("/create-payment-intent", async(req, res) =>{
-  const orderData = req.body;
-  console.log(orderData);
-  const paymentIntent = await stripe.paymentIntents.create(orderData);
-  res.json({publicKey: keyPublishable, clientSecret: paymentIntent.client_secret})
+app.get('/complete/:cid', async(req, res) => {
+  console.log(req.params.cid)
+  const customer = await stripe.customers.retrieve(req.params.cid)
+
+  res.render("complete", {customer: JSON.stringify(customer, null, 2)})
 })
 
+app.post('/create-customer', async (req, res) => {
+
+  stripe.customers.create({
+      payment_method: req.body.payment_method,
+      name: req.body.name,
+      email: req.body.email,
+      phone: req.body.phone,
+      invoice_settings: {
+        default_payment_method: req.body.payment_method
+      },
+    }).then(async (result) => {
+      const subscription = await stripe.subscriptions.create({
+        customer: result.id,
+        items: [{
+          plan: req.body.plan
+        }],
+        billing_cycle_anchor: 1583416492,
+      })
+    
+    
+      const invoice = await stripe.invoices.retrieve(subscription.latest_invoice)
+      const paymentIntent = await stripe.paymentIntents.retrieve(invoice.payment_intent)
+    
+      const customer = await stripe.customers.retrieve(result.id)
+
+      res.json({
+        success: true,
+        customer,
+        subscription,
+        paymentIntent,
+        invoice
+      });
+    })
+    .catch((err) => {
+      return res.status(402).json(err);
+    })
+
+
+})
+
+
+app.get("/publishable-key", async (req, res) => {
+
+  res.json({
+    publicKey: keyPublishable
+  })
+})
+
+app.post("/retrieve-payment", async (req, res) => {
+  stripe.paymentMethods.retrieve(
+    req.body.pm_id,
+    function (err, paymentMethod) {
+      // asynchronously called
+      res.json(paymentMethod);
+    }
+  );
+})
+
+app.get("/checkout", async (req, res) => {
+  res.render("checkout");
+});
+
 app.post("/pay", async (req, res) => {
-  const { paymentMethodId, paymentIntentId, items, currency, useStripeSdk } = req.body;
+  const {
+    paymentMethodId,
+    paymentIntentId,
+    items,
+    currency,
+    useStripeSdk
+  } = req.body;
 
   const orderAmount = 25;
 
@@ -103,7 +176,9 @@ app.post("/pay", async (req, res) => {
   } catch (e) {
     // Handle "hard declines" e.g. insufficient funds, expired card, etc
     // See https://stripe.com/docs/declines/codes for more
-    res.send({ error: e.message });
+    res.send({
+      error: e.message
+    });
   }
 });
 
@@ -115,7 +190,7 @@ const generateResponse = intent => {
       // Card requires authentication
       return {
         requiresAction: true,
-        clientSecret: intent.client_secret
+          clientSecret: intent.client_secret
       };
     case "requires_payment_method":
     case "requires_source":
@@ -127,17 +202,19 @@ const generateResponse = intent => {
       // Payment is complete, authentication not required
       // To cancel the payment after capture you will need to issue a Refund (https://stripe.com/docs/api/refunds)
       console.log("💰 Payment received!");
-      return { clientSecret: intent.client_secret };
+      return {
+        clientSecret: intent.client_secret
+      };
   }
 };
 
 // catch 404 and forward to error handler
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
   next(createError(404));
 });
 
 // error handler
-app.use(function(err, req, res, next) {
+app.use(function (err, req, res, next) {
   // set locals, only providing error in development
   res.locals.message = err.message;
   res.locals.error = req.app.get('env') === 'development' ? err : {};

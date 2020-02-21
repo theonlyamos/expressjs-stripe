@@ -1,0 +1,43 @@
+extends layout
+
+block content
+  .globalContent
+    main
+      .stripes
+        .stripe.s1
+        .stripe.s2
+        .stripe.s3
+      section.container-lg
+        
+        // Example 2
+        #example-3.cell.example.example3
+          form
+            .fieldset
+              input#example3-name.field(data-tid='elements_examples.form.name_label' type='text' placeholder='Name' required='' autocomplete='name')
+              input#example3-email.field.half-width(data-tid='elements_examples.form.email_label' type='email' placeholder='Email' required='' autocomplete='email')
+              input#example3-phone.field.half-width(data-tid='elements_examples.form.phone_label' type='tel' placeholder='Phone' required='' autocomplete='tel')
+            .fieldset
+              #example3-card-number.field.empty
+              #example3-card-expiry.field.empty.third-width
+              #example3-card-cvc.field.empty.third-width
+              input#example3-zip.field.empty.third-width(data-tid='elements_examples.form.postal_code_placeholder' placeholder='94107')
+            button(type='submit' data-tid='elements_examples.form.pay_button').
+              &dollar; #{amount/100}
+            .error(role='alert')
+              svg(xmlns='http://www.w3.org/2000/svg' width='17' height='17' viewbox='0 0 17 17')
+                path.base(fill='#000' d='M8.5,17 C3.80557963,17 0,13.1944204 0,8.5 C0,3.80557963 3.80557963,0 8.5,0 C13.1944204,0 17,3.80557963 17,8.5 C17,13.1944204 13.1944204,17 8.5,17 Z')
+                path.glyph(fill='#FFF' d='M8.5,7.29791847 L6.12604076,4.92395924 C5.79409512,4.59201359 5.25590488,4.59201359 4.92395924,4.92395924 C4.59201359,5.25590488 4.59201359,5.79409512 4.92395924,6.12604076 L7.29791847,8.5 L4.92395924,10.8739592 C4.59201359,11.2059049 4.59201359,11.7440951 4.92395924,12.0760408 C5.25590488,12.4079864 5.79409512,12.4079864 6.12604076,12.0760408 L8.5,9.70208153 L10.8739592,12.0760408 C11.2059049,12.4079864 11.7440951,12.4079864 12.0760408,12.0760408 C12.4079864,11.7440951 12.4079864,11.2059049 12.0760408,10.8739592 L9.70208153,8.5 L12.0760408,6.12604076 C12.4079864,5.79409512 12.4079864,5.25590488 12.0760408,4.92395924 C11.7440951,4.59201359 11.2059049,4.59201359 10.8739592,4.92395924 L8.5,7.29791847 L8.5,7.29791847 Z')
+              span.message
+          .success
+            .icon
+              svg(width='84px' height='84px' viewbox='0 0 84 84' version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink')
+                circle.border(cx='42' cy='42' r='40' stroke-linecap='round' stroke-width='4' stroke='#000' fill='none')
+                path.checkmark(stroke-linecap='round' stroke-linejoin='round' d='M23.375 42.5488281 36.8840688 56.0578969 64.891932 28.0500338' stroke-width='4' stroke='#000' fill='none')
+            h3.title(data-tid='elements_examples.success.title') Payment successful
+            p.message
+              span(data-tid='elements_examples.success.message')
+                pre
+    input(type="hidden" id="amount" value=`${amount}`)
+    input(type="hidden" id="plan" value=`${plan}`)
+  script(src='https://js.stripe.com/v3/')
+  script(src='js/index.js' data-rel-js='')
